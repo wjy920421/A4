@@ -1,10 +1,7 @@
-DerivedData/*
-MyDB.xcodeproj/xcuserdata/*
-MyDB.xcodeproj/project.xcworkspace/xcuserdata/*
-Build/bin/*
-Build/.sconsign.dblite
-XcodeBuild/bin/*
-XcodeBuild/.sconsign.dblite
-!XcodeBuild/bin/supplier.tbl
 *.o
 *.DS_Store
+
+Build/*
+!Build/SConstruct
+!Build/supplier.tbl
+!Build/supplierBig.tbl
