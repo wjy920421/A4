@@ -59,8 +59,8 @@ int main () {
 	
 				// we are looping through twice; the first time, ask only point queries
 				srand48 (i);
-				int lowBound = lrand48 () % 10000;
-				int highBound = lrand48 () % 10000;
+				int lowBound = lrand48 () % 10000 + 1;
+				int highBound = lrand48 () % 10000 + 1;
 				if (time % 2 == 0)
 					highBound = lowBound;
 	

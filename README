@@ -1,1 +1,19 @@
-# A4
+Jingyu Wang (jw76)
+
+
+Mar 14, 2016 - Assignment 4
+
+
+BUILD
+=====
+Command Line: Go to "Build", and use "SCons" to build the project. Select a target and continue. The executable file will be built inside "bin". 
+
+
+USAGE
+=====
+Simply run the excutable file, which will go through all unit tests automatically. 
+
+
+OTHER
+=====
+Each method or member variable in each class includes a short comment stating what it does. These comments can basically help you understand how the system works. 

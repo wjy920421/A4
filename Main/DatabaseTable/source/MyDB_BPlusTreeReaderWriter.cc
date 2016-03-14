@@ -2,6 +2,8 @@
 #ifndef BPLUS_C
 #define BPLUS_C
 
+#include <algorithm>
+#include <string.h>
 #include "MyDB_INRecord.h"
 #include "MyDB_BPlusTreeReaderWriter.h"
 #include "MyDB_PageReaderWriter.h"
@@ -74,7 +76,7 @@ MyDB_RecordIteratorAltPtr MyDB_BPlusTreeReaderWriter :: getRangeIteratorAlt (MyD
 
 bool MyDB_BPlusTreeReaderWriter :: discoverPages (int whichPage, vector <MyDB_PageReaderWriter> &list,
 	MyDB_AttValPtr low, MyDB_AttValPtr high) {
-
+    
 	// figure out the page to search
 	MyDB_PageReaderWriter pageToSearch = (*this)[whichPage];
 
@@ -82,6 +84,9 @@ bool MyDB_BPlusTreeReaderWriter :: discoverPages (int whichPage, vector <MyDB_Pa
 	if (pageToSearch.getType () == MyDB_PageType :: RegularPage) {
 
 		/* Your code here */
+        // add the page to the list
+		list.push_back (pageToSearch);
+
 		return true;
 		
 	// we have an internal node, so find the subtrees to seach
@@ -102,6 +107,29 @@ bool MyDB_BPlusTreeReaderWriter :: discoverPages (int whichPage, vector <MyDB_Pa
 		function <bool ()> comparatorHigh = buildComparator (hhigh, otherRec);
 
 		/* Your code here */
+		int lowPage = -1;
+        vector <int> pageList;
+
+        // find all possible page entries
+		while (temp->advance ())
+		{
+			temp->getCurrent (otherRec);
+			if (lowPage == -1 && ! comparatorLow ())
+                lowPage = otherRec->getPtr ();
+			if (lowPage != -1)
+            {
+                pageList.push_back(otherRec->getPtr ());
+                if (comparatorHigh ())
+                    break;
+            }
+		}
+        
+        // discover pages recursively
+        for (vector<int>::iterator it = pageList.begin() ; it != pageList.end(); ++it)
+        {
+            discoverPages (*it, list, low, high);
+        }
+
 		return false;
 
 	}
@@ -260,9 +288,16 @@ MyDB_RecordPtr MyDB_BPlusTreeReaderWriter :: append (int whichPage, MyDB_RecordP
 	// it is a regular page (data page)
 	if (pageToAddTo.getType () == MyDB_PageType :: RegularPage) {
 
-		/* your code here! */
-		
-		return nullptr;
+        /* your code here! */
+
+		// append the record to the data page
+		if (pageToAddTo.append (appendMe))
+		{
+			return nullptr;
+        }
+
+		// split the page if the page is full
+		return split (pageToAddTo, appendMe);
 
 	// we have an internal node, so find the subtree to insert into
 	} else {
@@ -272,11 +307,43 @@ MyDB_RecordPtr MyDB_BPlusTreeReaderWriter :: append (int whichPage, MyDB_RecordP
 		// iterate through the various subtrees
 		MyDB_RecordIteratorAltPtr temp = pageToAddTo.getIteratorAlt ();
 		MyDB_INRecordPtr otherRec = getINRecord ();
-		function <bool ()> comparator = buildComparator (appendMe, otherRec);
+		function <bool ()> comparator = buildComparator (otherRec, appendMe);
 
 		/* your code here! */
+		int nextPage;
 
-		return nullptr;
+        // find the page entry
+		while (temp->advance ())
+		{
+			temp->getCurrent (otherRec);
+			if (!comparator ())
+            {
+                nextPage = otherRec->getPtr ();
+                break;
+            }
+		}
+
+        // insert the record from the page entry
+		auto res = append (nextPage, appendMe);
+
+        // returns if there is no page split
+		if (res == nullptr)
+		{
+			return nullptr;
+		}
+
+		// insert the node of the new page to the current page and sort the current page
+		if (pageToAddTo.append (res))
+		{
+			MyDB_INRecordPtr lhs = getINRecord();
+			MyDB_INRecordPtr rhs = getINRecord();
+			function <bool ()> sortComparator = buildSortComparator (lhs, rhs);
+			pageToAddTo.sortInPlace (sortComparator, lhs, rhs);
+
+			return nullptr;
+		}
+
+		return split (pageToAddTo, res);
 	}
 
 	// note, we should never get here
@@ -345,38 +412,109 @@ MyDB_AttValPtr MyDB_BPlusTreeReaderWriter :: getKey (MyDB_RecordPtr fromMe) {
 }
 
 function <bool ()>  MyDB_BPlusTreeReaderWriter :: buildComparator (MyDB_RecordPtr lhs, MyDB_RecordPtr rhs) {
+    
+    MyDB_AttValPtr lhAtt, rhAtt;
+    
+    // in this case, the LHS is an IN record
+    if (lhs->getSchema () == nullptr) {
+        lhAtt = lhs->getAtt (0);
+        
+        // here, it is a regular data record
+    } else {
+        lhAtt = lhs->getAtt (whichAttIsOrdering);
+    }
+    
+    // in this case, the LHS is an IN record
+    if (rhs->getSchema () == nullptr) {
+        rhAtt = rhs->getAtt (0);
+        
+        // here, it is a regular data record
+    } else {
+        rhAtt = rhs->getAtt (whichAttIsOrdering);
+    }
+    
+    // now, build the comparison lambda and return
+    if (orderingAttType->promotableToInt ()) {
+        return [lhAtt, rhAtt]
+        {
+            return lhAtt->toInt () < rhAtt->toInt ();
+        };
+    } else if (orderingAttType->promotableToDouble ()) {
+        return [lhAtt, rhAtt]
+        {
+            return lhAtt->toDouble () < rhAtt->toDouble ();
+        };
+    } else if (orderingAttType->promotableToString ()) {
+        return [lhAtt, rhAtt]
+        {
+            return lhAtt->toString () < rhAtt->toString ();
+        };
+    } else {
+        cout << "This is bad... cannot do anything with the >.\n";
+        exit (1);
+    }
+}
 
-	MyDB_AttValPtr lhAtt, rhAtt;
-
-	// in this case, the LHS is an IN record
-	if (lhs->getSchema () == nullptr) {
-		lhAtt = lhs->getAtt (0);	
-
-	// here, it is a regular data record
-	} else {
-		lhAtt = lhs->getAtt (whichAttIsOrdering);
-	}
-
-	// in this case, the LHS is an IN record
-	if (rhs->getSchema () == nullptr) {
-		rhAtt = rhs->getAtt (0);	
-
-	// here, it is a regular data record
-	} else {
-		rhAtt = rhs->getAtt (whichAttIsOrdering);
-	}
-	
-	// now, build the comparison lambda and return
-	if (orderingAttType->promotableToInt ()) {
-		return [lhAtt, rhAtt] {return lhAtt->toInt () < rhAtt->toInt ();};
-	} else if (orderingAttType->promotableToDouble ()) {
-		return [lhAtt, rhAtt] {return lhAtt->toDouble () < rhAtt->toDouble ();};
-	} else if (orderingAttType->promotableToString ()) {
-		return [lhAtt, rhAtt] {return lhAtt->toString () < rhAtt->toString ();};
-	} else {
-		cout << "This is bad... cannot do anything with the >.\n";
-		exit (1);
-	}
+function <bool ()>  MyDB_BPlusTreeReaderWriter :: buildSortComparator (MyDB_RecordPtr lhs, MyDB_RecordPtr rhs) {
+    
+    MyDB_AttValPtr lhAtt, rhAtt;
+    MyDB_AttValPtr lhPtr = nullptr, rhPtr = nullptr;
+    
+    // in this case, the LHS is an IN record
+    if (lhs->getSchema () == nullptr) {
+        lhAtt = lhs->getAtt (0);
+        lhPtr = lhs->getAtt (1);
+        
+        // here, it is a regular data record
+    } else {
+        lhAtt = lhs->getAtt (whichAttIsOrdering);
+    }
+    
+    // in this case, the LHS is an IN record
+    if (rhs->getSchema () == nullptr) {
+        rhAtt = rhs->getAtt (0);
+        rhPtr = rhs->getAtt (1);
+        
+        // here, it is a regular data record
+    } else {
+        rhAtt = rhs->getAtt (whichAttIsOrdering);
+    }
+    
+    // now, build the comparison lambda and return
+    if (orderingAttType->promotableToInt ()) {
+        return [lhAtt, rhAtt, lhPtr, rhPtr]
+        {
+            if (lhAtt->toInt () == rhAtt->toInt () &&
+                lhPtr != nullptr &&
+                rhPtr != nullptr)
+                return lhPtr->toInt() > rhPtr->toInt();
+            
+            return lhAtt->toInt () < rhAtt->toInt ();
+        };
+    } else if (orderingAttType->promotableToDouble ()) {
+        return [lhAtt, rhAtt, lhPtr, rhPtr]
+        {
+            if (lhAtt->toDouble () == rhAtt->toDouble () &&
+                lhPtr != nullptr &&
+                rhPtr != nullptr)
+                return lhPtr->toInt() > rhPtr->toInt();
+            
+            return lhAtt->toDouble () < rhAtt->toDouble ();
+        };
+    } else if (orderingAttType->promotableToString ()) {
+        return [lhAtt, rhAtt, lhPtr, rhPtr]
+        {
+            if (lhAtt->toString () == rhAtt->toString () &&
+                lhPtr != nullptr &&
+                rhPtr != nullptr)
+                return lhPtr->toInt() > rhPtr->toInt();
+            
+            return lhAtt->toString () < rhAtt->toString ();
+        };
+    } else {
+        cout << "This is bad... cannot do anything with the >.\n";
+        exit (1);
+    }
 }
 
 

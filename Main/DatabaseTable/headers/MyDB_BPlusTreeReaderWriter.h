@@ -71,8 +71,9 @@ private:
 
 	// constructs an returns a comparator for the two records given... both must either be IN records for this particular
 	// tree, or they must be LN records for this tree, or a combination.  The resulting comparator returns true if and
-	// only if the first record has a key value less than the second record
-	function <bool ()> buildComparator (MyDB_RecordPtr lhs, MyDB_RecordPtr rhs);
+    // only if the first record has a key value less than the second record
+    function <bool ()> buildComparator (MyDB_RecordPtr lhs, MyDB_RecordPtr rhs);
+    function <bool ()> buildSortComparator (MyDB_RecordPtr lhs, MyDB_RecordPtr rhs);
 
 	// the location (page number) of the root in the tree
 	int rootLocation;
