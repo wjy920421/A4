@@ -14,6 +14,7 @@
 #define PAGE_RW_C
 
 #include <algorithm>
+#include <string.h>
 #include "MyDB_PageReaderWriter.h"
 #include "MyDB_PageRecIterator.h"
 #include "MyDB_PageRecIteratorAlt.h"
