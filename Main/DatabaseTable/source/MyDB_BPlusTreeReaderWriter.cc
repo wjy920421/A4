@@ -310,7 +310,7 @@ MyDB_RecordPtr MyDB_BPlusTreeReaderWriter :: append (int whichPage, MyDB_RecordP
 		function <bool ()> comparator = buildComparator (otherRec, appendMe);
 
 		/* your code here! */
-		int nextPage;
+		int nextPage = -1;
 
         // find the page entry
 		while (temp->advance ())
